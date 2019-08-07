@@ -63,7 +63,12 @@ public:
         EUV,
         EAlbedo,
         EShapeIndex,
-        EPrimIndex
+        EPrimIndex,
+        ELightDirection,
+        ECameraDirection,
+        EHalfAngle,
+        ELightDirectionShadow,
+        EHalfAngleShadow,
     };
 
     FieldIntegrator(const Properties &props) : SamplingIntegrator(props) {
@@ -87,10 +92,20 @@ public:
             m_field = EShapeIndex;
         } else if (field == "primIndex") {
             m_field = EPrimIndex;
+        } else if (field == "lightDirectionNoShadow"){
+            m_field = ELightDirection;
+        } else if (field == "cameraDirection"){
+            m_field = ECameraDirection;
+        } else if (field == "halfAngleNoShadow"){
+            m_field = EHalfAngle;
+        } else if (field == "lightDirection"){
+            m_field = ELightDirectionShadow;
+        } else if (field == "halfAngle"){
+            m_field = EHalfAngleShadow;
         } else {
             Log(EError, "Invalid 'field' parameter. Must be one of 'position', "
                 "'relPosition', 'distance', 'geoNormal', 'shNormal', "
-                "'primIndex', 'shapeIndex', or 'uv'!");
+                "'primIndex', 'shapeIndex', 'lightDirection' or 'uv'!");
         }
 
         if (props.hasProperty("undefined")) {
@@ -166,6 +181,59 @@ public:
                 break;
             case EPrimIndex:
                 result = Spectrum((Float) its.primIndex);
+                break;
+            case ECameraDirection:
+                result.fromLinearRGB(its.wi.x,its.wi.y,its.wi.z);
+                break;
+            case ELightDirection: {
+                    const Scene *scene = rRec.scene;
+                    DirectSamplingRecord dRec(its);
+                    Point2 sample = rRec.nextSample2D();
+                    Spectrum value = scene->sampleEmitterDirect(dRec, sample, false);
+                    if (!value.isZero()) {
+                        Vector3f toLight = normalize(its.toLocal(dRec.d));
+                        result.fromLinearRGB(toLight.x, toLight.y, toLight.z);
+                    }
+                }
+                break;
+            case EHalfAngle: {
+                Vector3f camera = normalize(its.wi);
+
+                const Scene *scene = rRec.scene;
+                    DirectSamplingRecord dRec(its);
+                    Point2 sample = rRec.nextSample2D();
+                    Spectrum value = scene->sampleEmitterDirect(dRec, sample, false);
+                    if (!value.isZero()) {
+                        Vector3f light = normalize(its.toLocal(dRec.d));
+                        Vector3f half = normalize(light + camera);
+                        result.fromLinearRGB(half.x, half.y, half.z);
+                    }
+                 }
+                 break;
+            case ELightDirectionShadow: {
+                    const Scene *scene = rRec.scene;
+                    DirectSamplingRecord dRec(its);
+                    Point2 sample = rRec.nextSample2D();
+                    Spectrum value = scene->sampleEmitterDirect(dRec, sample);
+                    if (!value.isZero()) {
+                        Vector3f toLight = normalize(its.toLocal(dRec.d));
+                        result.fromLinearRGB(toLight.x, toLight.y, toLight.z);
+                    }
+                }
+                break;
+            case EHalfAngleShadow: {
+                Vector3f camera = normalize(its.wi);
+
+                const Scene *scene = rRec.scene;
+                    DirectSamplingRecord dRec(its);
+                    Point2 sample = rRec.nextSample2D();
+                    Spectrum value = scene->sampleEmitterDirect(dRec, sample);
+                    if (!value.isZero()) {
+                        Vector3f light = normalize(its.toLocal(dRec.d));
+                        Vector3f half = normalize(light + camera);
+                        result.fromLinearRGB(half.x, half.y, half.z);
+                    }
+                }
                 break;
             default:
                 Log(EError, "Internal error!");
